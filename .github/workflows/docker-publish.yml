@@ -9,6 +9,7 @@ on:
 jobs:
   paths-filter:
     runs-on: ubuntu-latest
+    environment: prod
     outputs:
       backend: ${{ steps.filter.outputs.backend }}
       frontend: ${{ steps.filter.outputs.frontend }}
