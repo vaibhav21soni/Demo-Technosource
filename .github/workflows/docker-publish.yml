@@ -119,6 +119,10 @@ jobs:
           ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
           ARGOCD_APP_NAME: ${{ secrets.ARGOCD_APP_NAME }}
         run: |
+          # Normalize server address so argocd CLI can parse it cleanly.
+          ARGOCD_SERVER="$(printf '%s' "$ARGOCD_SERVER" | sed -E 's#^tcp:/*##' | sed -E 's#^https?://##')"
+          ARGOCD_SERVER="https://$ARGOCD_SERVER"
+          echo "Logging in to Argo CD server: $ARGOCD_SERVER"
           argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --insecure
           argocd app sync "$ARGOCD_APP_NAME"
           argocd app wait "$ARGOCD_APP_NAME" --health --timeout 300
