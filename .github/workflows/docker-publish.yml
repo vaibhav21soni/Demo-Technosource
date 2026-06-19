@@ -37,6 +37,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set short SHA
+        id: short_sha
+        run: echo "short_sha=$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v2
 
@@ -58,7 +62,7 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:${{ steps.short_sha.outputs.short_sha }}
 
       - name: Build and push frontend image
         if: needs.paths-filter.outputs.frontend == 'true'
@@ -69,6 +73,52 @@ jobs:
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:${{ steps.short_sha.outputs.short_sha }}
           build-args: |
             REACT_APP_API_URL=${{ secrets.FRONTEND_API_URL }}
+
+      - name: Clone Argo CD manifests repo
+        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
+        env:
+          ARGOCD_REPO_TOKEN: ${{ secrets.ARGOCD_REPO_TOKEN }}
+        run: |
+          git clone https://x-access-token:${ARGOCD_REPO_TOKEN}@github.com/vaibhav21soni/demo-argocd.git /tmp/demo-argocd
+
+      - name: Update Argo CD deployment YAMLs
+        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
+        run: |
+          cd /tmp/demo-argocd/apps/mern
+          if [ "${{ needs.paths-filter.outputs.backend }}" = "true" ]; then
+            sed -i "s|^\s*image: .*mern-backend:.*$|          image: ${{ secrets.DOCKERHUB_USERNAME }}/mern-backend:${{ steps.short_sha.outputs.short_sha }}|" backend-deployment.yaml
+          fi
+          if [ "${{ needs.paths-filter.outputs.frontend }}" = "true" ]; then
+            sed -i "s|^\s*image: .*mern-frontend:.*$|          image: ${{ secrets.DOCKERHUB_USERNAME }}/mern-frontend:${{ steps.short_sha.outputs.short_sha }}|" frontend-deployment.yaml
+          fi
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          git add backend-deployment.yaml frontend-deployment.yaml
+          if git diff --cached --quiet; then
+            echo "No manifest changes to commit"
+          else
+            git commit -m "ci: update Argo CD images to short SHA ${{ steps.short_sha.outputs.short_sha }}"
+            git push origin HEAD
+          fi
+
+      - name: Install Argo CD CLI
+        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
+        run: |
+          curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x /tmp/argocd-linux-amd64
+          sudo mv /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+
+      - name: Update Argo CD deployment
+        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
+          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
+          ARGOCD_APP_NAME: ${{ secrets.ARGOCD_APP_NAME }}
+        run: |
+          argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --insecure
+          argocd app sync "$ARGOCD_APP_NAME"
+          argocd app wait "$ARGOCD_APP_NAME" --health --timeout 300
