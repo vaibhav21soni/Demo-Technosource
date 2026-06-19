@@ -96,7 +96,7 @@ class App extends Component {
             </p>
             <a className='shirts' href='https://www.teepublic.com/en-au/user/codeweario/albums/4812-tech-stacks' target='_blank' rel='noopener noreferrer'>
               <img src={shirts} alt='Buy MERN Shirts' />
-              <br/>Buy MERN Merchandise
+              <br/>Buy MERN shirt
             </a>
           </div>
         </div>
