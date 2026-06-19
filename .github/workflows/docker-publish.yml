@@ -104,32 +104,4 @@ jobs:
             git push origin HEAD
           fi
 
-      - name: Install Argo CD CLI
-        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
-        run: |
-          curl -sSL -o /tmp/argocd-linux-amd64 https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x /tmp/argocd-linux-amd64
-          sudo mv /tmp/argocd-linux-amd64 /usr/local/bin/argocd
-
-      - name: Update Argo CD deployment
-        if: needs.paths-filter.outputs.backend == 'true' || needs.paths-filter.outputs.frontend == 'true'
-        env:
-          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
-          ARGOCD_USERNAME: ${{ secrets.ARGOCD_USERNAME }}
-          ARGOCD_PASSWORD: ${{ secrets.ARGOCD_PASSWORD }}
-          ARGOCD_APP_NAME: ${{ secrets.ARGOCD_APP_NAME }}
-        run: |
-          # Normalize server address so argocd CLI can parse it cleanly.
-          ARGOCD_SERVER="$(printf '%s' "$ARGOCD_SERVER" | tr -d '[:space:]')"
-          while [[ "$ARGOCD_SERVER" =~ ^(tcp|http|https):// ]]; do
-            ARGOCD_SERVER="${ARGOCD_SERVER#tcp://}"
-            ARGOCD_SERVER="${ARGOCD_SERVER#http://}"
-            ARGOCD_SERVER="${ARGOCD_SERVER#https://}"
-          done
-          ARGOCD_SERVER="${ARGOCD_SERVER#/}"
-          ARGOCD_SERVER="${ARGOCD_SERVER%/}"
-          ARGOCD_SERVER="https://$ARGOCD_SERVER"
-          echo "Logging in to Argo CD server: $ARGOCD_SERVER"
-          argocd login "$ARGOCD_SERVER" --username "$ARGOCD_USERNAME" --password "$ARGOCD_PASSWORD" --insecure
-          argocd app sync "$ARGOCD_APP_NAME"
-          argocd app wait "$ARGOCD_APP_NAME" --health --timeout 300
+      
